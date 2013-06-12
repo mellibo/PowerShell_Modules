@@ -1,0 +1,4 @@
+cls
+powershell -file TEstExecuteNonQueryAlterSPMultiplesIntancias.ps1
+powershell -file TestGetQueryMultipleServersOutputHtml.ps1
+powershell -file TestGetCommand.ps1

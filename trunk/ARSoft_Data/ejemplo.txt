@@ -1,0 +1,7 @@
+import-module arsoft_data
+
+get-dataset -instances (local),localhost\sql2005 -command "select @@servername Instance, * FROM sys.databases" | Merge-dataset | Get-Datatable | export-datatable
+
+get-content instancias.txt | get-dataset -command "select @@servername Instance , ServerProperty('Edition') Version, ServerProperty('ProductVersion') Build, ServerProperty('productLevel') SP, ServerProperty('Collation') Collation, @@Version Version" | Merge-dataset | get-datatable | export-datatable -outputFile c:\dba\versiones.htm
+
+get-content instancias.txt | execute-command -command "c:\dba\sp.sql" -database "Control"
