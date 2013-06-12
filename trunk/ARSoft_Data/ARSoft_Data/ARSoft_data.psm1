@@ -1,4 +1,18 @@
-﻿Function Get-DataSet
+﻿Function Get-SqlValue
+{
+    [CmdletBinding()]param (
+        [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][string]$instance,
+        [Parameter(Mandatory=$False,Position=2)][string]$command,
+        [Parameter(Mandatory=$False,Position=3)][string]$database
+        )
+    PROCESS 
+    {
+        $ds = Get-DataSet -instances $instance -command $command -database $database
+        Write-Output $ds.Tables[0].Rows[0][0]
+    }
+}
+
+Function Get-DataSet
 {
     [CmdletBinding()]param (
         [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][string[]]$instances,
