@@ -8,7 +8,9 @@
     PROCESS 
     {
         $ds = Get-DataSet -instances $instance -command $command -database $database
-        Write-Output $ds.Tables[0].Rows[0][0]
+	$value = $ds.Tables[0].Rows[0][0]
+	Write-Verbose "Get-SqlValue: $value; Instance = $instance; Command = $command; Database = $database"
+        Write-Output $value
     }
 }
 
@@ -34,6 +36,8 @@ Function Get-DataSet
             if ([system.String]::IsNullOrEmpty($table)) { $table = "Tabla1" }
             $ret = $SqlAdapter.Fill($DataSet, $table)
             $SqlConnection.Close()
+            $rows = $DataSet.Tables[$table].Rows.Count
+    	    Write-Verbose "Get-DataSet: rows = $rows; Instance = $instance; Command = $command; Database = $database"
             Write-Output $DataSet
         }
     }
@@ -53,7 +57,8 @@ Function Execute-Command
             $SqlConnection = Get-Connection $instance $database
             $SqlCmd = Get-Command $SqlConnection $command
             $SqlConnection.Open()
-            $SqlCmd.ExecuteNonQuery();
+            $rows = $SqlCmd.ExecuteNonQuery();
+    	    Write-Verbose "Execute-Command: rows = $rows; Instance = $instance; Command = $command; Database = $database"
         }
     }
 }
@@ -85,7 +90,7 @@ Function Get-Command{
             $SqlCmd.Connection = $SqlConnection
             $SqlCmd.CommandTimeout = 0
             $cn = $SqlConnection.ConnectionString
-            Write-Host "Connection: $cn   -  Command: $command"
+            #Write-Host "Connection: $cn   -  Command: $command"
             $SqlCmd
 }
 
