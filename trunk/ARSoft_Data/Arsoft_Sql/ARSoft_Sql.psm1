@@ -9,14 +9,14 @@
         )
     PROCESS 
     {
-        $ds = Get-DataSet -instances $instance -command $command -database $database -login $login -password $password
+        $ds = Get-SqlDataSet -instances $instance -command $command -database $database -login $login -password $password
 	$value = $ds.Tables[0].Rows[0][0]
 	Write-Verbose "Get-SqlValue: $value; Instance = $instance; Command = $command; Database = $database"
         Write-Output $value
     }
 }
 
-Function Get-DataSet
+Function Get-SqlDataSet
 {
     [CmdletBinding()]param (
         [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][string[]]$instances,
@@ -31,8 +31,8 @@ Function Get-DataSet
     {
         foreach ($instance in $instances)
         {
-            $SqlConnection = Get-Connection $instance $database -login $login -password $password
-            $SqlCmd = Get-Command $SqlConnection $command $parameters
+            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password
+            $SqlCmd = Get-SqlCommand $SqlConnection $command $parameters
             $SqlConnection.Open()
             $SqlAdapter = New-Object System.Data.SqlClient.SqlDataAdapter
             $SqlAdapter.SelectCommand = $SqlCmd
@@ -41,14 +41,41 @@ Function Get-DataSet
             if ([system.String]::IsNullOrEmpty($table)) { $table = "Tabla1" }
             $ret = $SqlAdapter.Fill($DataSet, $table)
             $SqlConnection.Close()
+            $SqlConnection.Dispose()
             $rows = $DataSet.Tables[$table].Rows.Count
-    	    Write-Verbose "Get-DataSet: rows = $rows; Instance = $instance; Command = $command; Database = $database"
+    	    Write-Verbose "Get-SqlDataSet: rows = $rows; Instance = $instance; Command = $command; Database = $database"
             Write-Output $DataSet
         }
     }
 }
  
-Function Execute-Command
+Function Invoke-SqlCommand
+{
+    [CmdletBinding()]param (
+        [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][string[]]$instances,
+        [Parameter(Mandatory=$False,Position=2)][string]$command,
+        [Parameter(Mandatory=$False,Position=3)][string]$database,
+        [Parameter(Mandatory=$False,Position=4)][string]$login = $null, 
+        [Parameter(Mandatory=$False,Position=5)][string]$password = $null,
+        [Parameter(Mandatory=$False,Position=6)][System.Data.SqlClient.SqlParameter[]]$parameters = [System.Data.SqlClient.SqlParameter[]]$null  
+        )
+    PROCESS 
+    {
+        foreach ($instance in $instances)
+        {
+            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password
+            $SqlCmd = Get-SqlCommand $SqlConnection $command $parameters
+            $SqlConnection.Open()
+            $rows = $SqlCmd.ExecuteNonQuery();
+            $SqlConnection.Close()
+            $SqlConnection.Dispose()
+            Write-Output $rows
+    	    Write-Verbose "Invoke-SqlCommand: rows = $rows; Instance = $instance; Command = $command; Database = $database"
+        }
+    }
+}
+ 
+Function Get-SqlReader
 {
     [CmdletBinding()]param (
         [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][string[]]$instances,
@@ -62,16 +89,23 @@ Function Execute-Command
     {
         foreach ($instance in $instances)
         {
-            $SqlConnection = Get-Connection $instance $database -login $login -password $password
-            $SqlCmd = Get-Command $SqlConnection $command $parameters
+            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password
+            $SqlCmd = Get-SqlCommand $SqlConnection $command $parameters
             $SqlConnection.Open()
-            $rows = $SqlCmd.ExecuteNonQuery();
-    	    Write-Verbose "Execute-Command: rows = $rows; Instance = $instance; Command = $command; Database = $database"
+    	    Write-Verbose "Get-SqlReader: Instance = $instance; Command = $command; Database = $database"
+            $reader = [System.Data.SqlClient.SqlDataReader]$SqlCmd.ExecuteReader([System.Data.CommandBehavior]::CloseConnection)
+            return ,$reader
         }
     }
 }
 
-Function Get-Connection{
+$handler_Connection_InfoMessage=
+{
+param([object]$sender, [System.Data.SqlClient.SqlInfoMessageEventArgs]$e)
+    WriteHost e.Message
+}
+
+Function Get-SqlConnection{
     [CmdletBinding()]param (
         [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][string]$instance,
         [Parameter(Mandatory=$False,Position=2)][string]$database,
@@ -87,10 +121,16 @@ Function Get-Connection{
                 $connectionString += "user id=$login;password=$password;"
             }
             $SqlConnection.ConnectionString =  $connectionString
+    	    Write-Verbose "Get-SqlConnection: Instance = $instance; Database = $database"
+            $a=Register-ObjectEvent $SqlConnection InfoMessage -Action { 
+                    #$Event | Out-Host 
+                    write-host $Event.SourceEventArgs
+                    }
+#            $SqlConnection.InfoMessage += $handler_Connection_InfoMessage
             $SqlConnection
 }
 
-Function Get-Command{
+Function Get-SqlCommand{
     [CmdletBinding()]param (
         [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][System.Data.SqlClient.SqlConnection]$SqlConnection,
         [Parameter(Mandatory=$True,Position=2,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][string]$command,
@@ -104,12 +144,37 @@ Function Get-Command{
             $SqlCmd.CommandText = $commandText
             $SqlCmd.Connection = $SqlConnection
             $SqlCmd.CommandTimeout = 0
+			Write-Verbose "Get-SqlConnection: parameters = $parameters"
+
             foreach($par in $parameters){
-                $SqlCmd.Parameters.Add($par)
+                if ($par) { $SqlCmd.Parameters.Add($par) | Out-Null }
             }
-            $cn = $SqlConnection.ConnectionString
+            #$cn = $SqlConnection.ConnectionString
             #Write-Host "Connection: $cn   -  Command: $command"
             $SqlCmd
+}
+
+Function Get-SqlXmlParameter{
+    [CmdletBinding()]param (
+        [Parameter(Mandatory=$True,Position=1)][string]$name,
+        [Parameter(Mandatory=$True,Position=2)][System.XML.XMLDocument]$xml 
+        )
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($xml.OuterXml)
+        $m = new-object System.IO.MemoryStream 
+        $m.Write($bytes, 0,$bytes.length)
+
+        $p = new-object System.Data.SqlTypes.SqlXml -ArgumentList @($m)
+        $parameter = new-object System.Data.SqlClient.SqlParameter -ArgumentList @("@xml", $p)
+        $parameter
+}
+
+Function Get-SqlParameter{
+    [CmdletBinding()]param (
+        [Parameter(Mandatory=$True,Position=1)][string]$name,
+        [Parameter(Mandatory=$True,Position=2)][string]$value
+        )
+        $parameter = new-object System.Data.SqlClient.SqlParameter -ArgumentList @($name, $value)
+        $parameter
 }
 
 
@@ -236,5 +301,7 @@ Get-Dataset -instances localhost,localhost "select getdate() as kk" | SELECT { $
 Export-SqlToHtml -instances localhost,localhost "select getdate() as kk" "kk"
 
 Export-SqlToHtml -instances localhost,localhost "EjecucionesActuales.sql"  "kk2"
+invoke-sqlcommand localhost -command "exec xp_cmdshell 'dir'"
+
 #>
  
