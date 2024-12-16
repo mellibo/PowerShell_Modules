@@ -25,13 +25,15 @@ Function Get-SqlDataSet
         [Parameter(Mandatory=$False,Position=4)][string]$tableName,
         [Parameter(Mandatory=$False,Position=5)][string]$login = $null, 
         [Parameter(Mandatory=$False,Position=6)][string]$password = $null,
-        [Parameter(Mandatory=$False,Position=7)][System.Data.SqlClient.SqlParameter[]]$parameters = $null 
+        [Parameter(Mandatory=$False,Position=7)][System.Data.SqlClient.SqlParameter[]]$parameters = $null, 
+        [Parameter(Mandatory=$False,Position=8)][string]$AppName = "" 
+
         )
     PROCESS 
     {
         foreach ($instance in $instances)
         {
-            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password
+            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password -AppName $AppName
             $SqlCmd = Get-SqlCommand $SqlConnection $command $parameters
             $SqlConnection.Open()
             $SqlAdapter = New-Object System.Data.SqlClient.SqlDataAdapter
@@ -57,13 +59,14 @@ Function Invoke-SqlCommand
         [Parameter(Mandatory=$False,Position=3)][string]$database,
         [Parameter(Mandatory=$False,Position=4)][string]$login = $null, 
         [Parameter(Mandatory=$False,Position=5)][string]$password = $null,
-        [Parameter(Mandatory=$False,Position=6)][System.Data.SqlClient.SqlParameter[]]$parameters = [System.Data.SqlClient.SqlParameter[]]$null  
+        [Parameter(Mandatory=$False,Position=6)][System.Data.SqlClient.SqlParameter[]]$parameters = [System.Data.SqlClient.SqlParameter[]]$null,
+        [Parameter(Mandatory=$False,Position=7)][string]$AppName = "" 
         )
     PROCESS 
     {
         foreach ($instance in $instances)
         {
-            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password
+            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password -AppName $AppName
             $SqlCmd = Get-SqlCommand $SqlConnection $command $parameters
             $SqlConnection.Open()
             $rows = $SqlCmd.ExecuteNonQuery();
@@ -83,13 +86,15 @@ Function Get-SqlReader
         [Parameter(Mandatory=$False,Position=3)][string]$database,
         [Parameter(Mandatory=$False,Position=4)][string]$login = $null, 
         [Parameter(Mandatory=$False,Position=5)][string]$password = $null,
-        [Parameter(Mandatory=$False,Position=6)][System.Data.SqlClient.SqlParameter[]]$parameters = $null  
+        [Parameter(Mandatory=$False,Position=6)][System.Data.SqlClient.SqlParameter[]]$parameters = $null,
+        [Parameter(Mandatory=$False,Position=7)][string]$AppName = "" 
+
         )
     PROCESS 
     {
         foreach ($instance in $instances)
         {
-            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password
+            $SqlConnection = Get-SqlConnection $instance $database -login $login -password $password -AppName $AppName
             $SqlCmd = Get-SqlCommand $SqlConnection $command $parameters
             $SqlConnection.Open()
     	    Write-Verbose "Get-SqlReader: Instance = $instance; Command = $command; Database = $database"
@@ -110,11 +115,13 @@ Function Get-SqlConnection{
         [Parameter(Mandatory=$True,Position=1,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)][string]$instance,
         [Parameter(Mandatory=$False,Position=2)][string]$database,
         [Parameter(Mandatory=$False,Position=3)][string]$login = $null, 
-        [Parameter(Mandatory=$False,Position=4)][string]$password = $null 
+        [Parameter(Mandatory=$False,Position=4)][string]$password = $null, 
+        [Parameter(Mandatory=$False,Position=5)][string]$AppName = "" 
         )
             $SqlConnection = New-Object System.Data.SqlClient.SqlConnection
             if ([system.String]::IsNullOrEmpty($database)) { $database = "master" }
             $connectionString = "Server=$instance;Database=$database;"
+            if ([system.String]::IsNullOrEmpty($AppName)) { $connectionString += "App=$AppName;" }
             if ([system.String]::IsNullOrEmpty($login)) {
                 $connectionString += "Integrated Security=True;"
             } else {
